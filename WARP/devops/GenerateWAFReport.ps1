@@ -9,9 +9,10 @@ param (
     Run the script!
 #>
 
-
 #Get the working directory from the script
 $workingDirectory = (Get-Location).Path
+$MinimumReportLevel = 65
+$ShowTop = 8
 
 #Get the WAF report via a system dialog
 Function Get-FileName($initialDirectory)
@@ -58,7 +59,6 @@ $descriptionsFile = Import-Csv "$workingDirectory\WAF Category Descriptions.csv"
 $title = "Well-Architected [pillar] Assessment"
 $reportDate = Get-Date -Format "yyyy-MM-dd-HHmm"
 $localReportDate = Get-Date -Format g
-#$tableStart = $content.IndexOf("Title,Description,Link-Text,Link,Priority,Category,Subcategory,Weight")
 $tableStart = $content.IndexOf("Category,Link-Text,Link,Priority,ReportingCategory,ReportingSubcategory,Weight,Context")
 $EndStringIdentifier = $content | Where-Object{$_.Contains("--,,")} | Select-Object -Unique -First 1
 $tableEnd = $content.IndexOf($EndStringIdentifier) - 1
@@ -80,23 +80,23 @@ function Get-PillarInfo($pillar)
 {
     if($pillar.Contains("Cost Optimization"))
     {
-        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $costScore; "Description" = $costDescription}
+        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $costScore; "Description" = $costDescription; "ScoreDescription" = $CostScoreDescription}
     }
     if($pillar.Contains("Reliability"))
     {
-        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $reliabilityScore; "Description" = $reliabilityDescription}
+        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $reliabilityScore; "Description" = $reliabilityDescription; "ScoreDescription" = $ReliabilityScoreDescription}
     }
     if($pillar.Contains("Operational Excellence"))
     {
-        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $operationsScore; "Description" = $operationsDescription}
+        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $operationsScore; "Description" = $operationsDescription; "ScoreDescription" = $OperationsScoreDescription}
     }
     if($pillar.Contains("Performance Efficiency"))
     {
-        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $performanceScore; "Description" = $performanceDescription}
+        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $performanceScore; "Description" = $performanceDescription; "ScoreDescription" = $PerformanceScoreDescription}
     }
     if($pillar.Contains("Security"))
     {
-        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $securityScore; "Description" = $securityDescription}
+        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $securityScore; "Description" = $securityDescription; "ScoreDescription" = $SecurityScoreDescription}
     }
 }
 
@@ -106,49 +106,55 @@ $operationsScore = ""
 $performanceScore = ""
 $reliabilityScore = ""
 $securityScore = ""
+$overallScoreDescription = ""
+$CostScoreDescription = ""
+$operationsScoreDescription = ""
+$performanceScoreDescription = ""
+$reliabilityScoreDescription = ""
+$securityScoreDescription = ""
 
 for($i=3; $i -le 8; $i++)
 {
     if($Content[$i].Contains("overall"))
     {
         $overallScore = $Content[$i].Split(',')[2].Trim("'").Split('/')[0]
+        $overallScoreDescription = $Content[$i].Split(',')[1]
     }
     if($Content[$i].Contains("Cost Optimization"))
     {
         $costScore = $Content[$i].Split(',')[2].Trim("'").Split('/')[0]
+        $CostScoreDescription = $Content[$i].Split(',')[1]
     }
     if($Content[$i].Contains("Reliability"))
     {
         $reliabilityScore = $Content[$i].Split(',')[2].Trim("'").Split('/')[0]
+        $reliabilityScoreDescription = $Content[$i].Split(',')[1]
     }
     if($Content[$i].Contains("Operational Excellence"))
     {
         $operationsScore = $Content[$i].Split(',')[2].Trim("'").Split('/')[0]
+        $operationsScoreDescription = $Content[$i].Split(',')[1]
     }
     if($Content[$i].Contains("Performance Efficiency"))
     {
         $performanceScore = $Content[$i].Split(',')[2].Trim("'").Split('/')[0]
+        $performanceScoreDescription = $Content[$i].Split(',')[1]
     }
     if($Content[$i].Contains("Security"))
     {
         $securityScore = $Content[$i].Split(',')[2].Trim("'").Split('/')[0]
+        $securityScoreDescription = $Content[$i].Split(',')[1]
     }
 }
-
 #endregion
 
 
-
 #region Instantiate PowerPoint variables
-#Add-type -AssemblyName office
 $application = New-Object -ComObject powerpoint.application
-#$application.visible = [Microsoft.Office.Core.MsoTriState]::msoTrue
-#$slideType = “microsoft.office.interop.powerpoint.ppSlideLayout” -as [type]
 $presentation = $application.Presentations.open($templatePresentation)
 $titleSlide = $presentation.Slides[8]
 $summarySlide = $presentation.Slides[9]
 $detailSlide = $presentation.Slides[10]
-
 #endregion
 
 #region Clean the uncategorized data
@@ -176,16 +182,20 @@ foreach($pillar in $pillars)
     $newTitleSlide.MoveTo($presentation.Slides.Count)
     $newTitleSlide.Shapes[3].TextFrame.TextRange.Text = $slideTitle
     $newTitleSlide.Shapes[4].TextFrame.TextRange.Text = $newTitleSlide.Shapes[4].TextFrame.TextRange.Text.Replace("[Report_Date]",$localReportDate)
-
     # Edit Executive Summary Slide
-
-    #Add logic to get overall score
+    # Add logic to get overall score
     $newSummarySlide = $summarySlide.Duplicate()
     $newSummarySlide.MoveTo($presentation.Slides.Count)
-    $newSummarySlide.Shapes[3].TextFrame.TextRange.Text = $pillarInfo.Score
-    $newSummarySlide.Shapes[4].TextFrame.TextRange.Text = $pillarInfo.Description
-    [Single]$summBarScore = [int]$pillarInfo.Score*2.47+56
-    $newSummarySlide.Shapes[11].Left = $summBarScore
+   
+if(![string]::IsNullOrEmpty($pillarInfo.Score)){
+    $ScoreText = "$($pillarInfo.Score) - $($pillarInfo.ScoreDescription)"
+}
+else{
+   $ScoreText = "$($pillarInfo.ScoreDescription)"
+}
+ 
+$newSummarySlide.Shapes[4].TextFrame.TextRange.Text = $ScoreText
+$newSummarySlide.Shapes[5].TextFrame.TextRange.Text = $pillarInfo.Description
 
     $CategoriesList = New-Object System.Collections.ArrayList
     $categories = ($pillarData | Sort-Object -Property "Weight" -Descending).ReportingCategory | Select-Object -Unique
@@ -193,113 +203,109 @@ foreach($pillar in $pillars)
     {
         $categoryWeight = ($pillarData | Where-Object{$_.ReportingCategory -eq $category}).Weight | Measure-Object -Sum
         $categoryScore = $categoryWeight.Sum/$categoryWeight.Count
-        $CategoriesList.Add([pscustomobject]@{"Category" = $category; "CategoryScore" = $categoryScore}) | Out-Null
-    }
-
-    $CategoriesList = $CategoriesList | Sort-Object -Property CategoryScore -Descending
-
-    $counter = 13 #Shape count for the slide to start adding scores
-    $categoryCounter = 0
-    $areaIconX = 378.1129
-    $areaIconY = @(176.4359, 217.6319, 258.3682, 299.1754, 339.8692, 382.6667, 423.9795, 461.0491)
-    foreach($category in $CategoriesList)
-    {
-        if($category.Category -ne "Uncategorized")
-        {
-            try
-            {
-                #$newSummarySlide.Shapes[8] #Domain 1 Icon
-                $newSummarySlide.Shapes[$counter].TextFrame.TextRange.Text = $category.CategoryScore.ToString("#")
-                $newSummarySlide.Shapes[$counter+1].TextFrame.TextRange.Text = $category.Category
-                $counter = $counter + 3
-                switch ($category.CategoryScore) {
-                    { $_ -lt 33 } { 
-                        $categoryShape = $newSummarySlide.Shapes[39]
-                    }
-                    { $_ -gt 33 -and $_ -lt 67 } { 
-                        $categoryShape = $newSummarySlide.Shapes[38] 
-                    }
-                    { $_ -gt 67 } { 
-                        $categoryShape = $newSummarySlide.Shapes[37] 
-                    }
-                    Default { 
-                        $categoryShape = $newSummarySlide.Shapes[38] 
-                    }
-                }
-                $categoryShape.Duplicate() | Out-Null
-                $newShape = $newSummarySlide.Shapes.Count
-                $newSummarySlide.Shapes[$newShape].Left = $areaIconX
-                $newSummarySlide.Shapes[$newShape].top = $areaIcony[$categoryCounter] 
-                $categoryCounter = $categoryCounter + 1
-            }
-            catch{}
+        $categoryWeightiestCount = ($pillarData | Where-Object{$_.ReportingCategory -eq $category}).Weight -ge $MinimumReportLevel | Measure-Object
+        $CategoriesList.Add([pscustomobject]@{"Category" = $category; "CategoryScore" = $categoryScore; "CategoryWeightiestCount" = $categoryWeightiestCount.Count}) | Out-Null
         }
-    }
 
-    #Remove the boilerplate placeholder text if categories < 8
-    if($categories.Count -lt 8)
-    {
-        $skipLastShape = $newSummarySlide.Shapes.count - $categoryCounter
-        for($k=$skipLastShape; $k -gt $counter-1; $k--)
+        $CategoriesList = $CategoriesList | Sort-Object -Property CategoryScore -Descending
+
+        $counter = 9 #Shape count for the slide to start adding scores
+        foreach($category in $CategoriesList)
         {
-            try
+           if($category.Category -ne "Uncategorized")
+           {
+               try
+               {
+                   #$newSummarySlide.Shapes[8] #Domain 1 Icon
+                   #$newSummarySlide.Shapes[$counter].TextFrame.TextRange.Text = $category.CategoryScore.ToString("#")
+                   $newSummarySlide.Shapes[$counter].TextFrame.TextRange.Text = $category.CategoryWeightiestCount.ToString("#")
+                   $newSummarySlide.Shapes[$counter+1].TextFrame.TextRange.Text = $category.Category
+                   $counter = $counter + 2 # no graphic anymore
+               }
+               catch{}
+           }
+        }
+       
+        #Remove the boilerplate placeholder text if categories < 8
+        if($categories.Count -lt 8)
+        {
+            for($k=$newSummarySlide.Shapes.count; $k -gt $counter-1; $k--)
             {
+               try
+               {
                 $newSummarySlide.Shapes[$k].Delete()
                 <#$newSummarySlide.Shapes[$k].Delete()
                 $newSummarySlide.Shapes[$k+1].Delete()#>
-            }
-            catch{}
-        }
-    }
-
-    # Edit new category summary slide
-
-    foreach($category in $CategoriesList.Category)
-    {
-        $categoryData = $pillarData | Where-Object{$_.ReportingCategory -eq $category -and $_.Category -eq $pillar}
-        $categoryDataCount = ($categoryData | measure).Count
-        $categoryWeight = ($pillarData | Where-Object{$_.ReportingCategory -eq $category}).Weight | Measure-Object -Sum
-        $categoryScore = $categoryWeight.Sum/$categoryWeight.Count
-        $categoryDescription = ($descriptionsFile | Where-Object{$_.Pillar -eq $pillar -and $categoryData.ReportingCategory.Contains($_.Category)}).Description
-        $y = $categoryDataCount
-        $x = 5
-        if($categoryDataCount -lt 5)
-        {
-            $x = $categoryDataCount
-        }
-
-        $newDetailSlide = $detailSlide.Duplicate()
-        $newDetailSlide.MoveTo($presentation.Slides.Count)
-
-        $newDetailSlide.Shapes[1].TextFrame.TextRange.Text = $category
-        $newDetailSlide.Shapes[3].TextFrame.TextRange.Text = $categoryScore.ToString("#")
-        [Single]$detailBarScore = $categoryScore*2.48+38
-        $newDetailSlide.Shapes[12].Left = $detailBarScore
-        $newDetailSlide.Shapes[4].TextFrame.TextRange.Text = $categoryDescription
-        $newDetailSlide.Shapes[7].TextFrame.TextRange.Text = "Top $x out of $y recommendations:"
-        $newDetailSlide.Shapes[8].TextFrame.TextRange.Text = ($categoryData | Sort-Object -Property "Link-Text" -Unique | Sort-Object -Property Weight -Descending | Select-Object -First $x).'Link-Text' -join "`r`n`r`n"
-        $sentenceCount = $newDetailSlide.Shapes[8].TextFrame.TextRange.Sentences().count
-
-        for($k=1; $k -le $sentenceCount; $k++)
-        {
-            if($newDetailSlide.Shapes[8].TextFrame.TextRange.Sentences($k).Text)
-            {
-                try
-                {
-                    $recommendationObject = $categoryData | Where-Object{$newDetailSlide.Shapes[8].TextFrame.TextRange.Sentences($k).Text.Contains($_.'Link-Text')}
-                    $newDetailSlide.Shapes[8].TextFrame.TextRange.Sentences($k).ActionSettings(1).HyperLink.Address = $recommendationObject.Link
                 }
                 catch{}
             }
-        }    
-    }
-}
-
-$titleSlide.Delete()
-$summarySlide.Delete()
-$detailSlide.Delete()
-$presentation.SavecopyAs(“$workingDirectory\PnP_PowerPointReport_Template_$reportDate.pptx”)
-$presentation.Close()
+        }
+       
+        # Edit new category summary slide
+       
+        foreach($category in $CategoriesList.Category)
+        {
+           $BlurbIndex=1
+           $TitleIndex=2 
+           $ScoreIndex = 5
+           $DescriptionIndex = 6
+           $InnerTitleIndex=9
+           $ContentIndex=10
+       
+           $categoryData = $pillarData | Where-Object{$_.ReportingCategory -eq $category -and $_.Category -eq $pillar}
+           $categoryDataCount = ($categoryData | measure).Count
+           $categoryWeight = ($pillarData | Where-Object{$_.ReportingCategory -eq $category}).Weight | Measure-Object -Sum
+           $categoryScore = $categoryWeight.Sum/$categoryWeight.Count
+           $categoryDescription = ($descriptionsFile | Where-Object{$_.Pillar -eq $pillar -and $categoryData.ReportingCategory.Contains($_.Category)}).Description
+           $y = $categoryDataCount
+           $x = $ShowTop
+           if($categoryDataCount -lt $x)
+           {
+               $x = $categoryDataCount
+           }
+       
+           $newDetailSlide = $detailSlide.Duplicate()
+           $newDetailSlide.MoveTo($presentation.Slides.Count)
+       
+           $newDetailSlide.Shapes[$TitleIndex].TextFrame.TextRange.Text = $category
+           if($category -eq "Uncategorized"){
+               $newDetailSlide.Shapes[$BlurbIndex].TextFrame.TextRange.Text = ""
+               $newDetailSlide.Shapes[$ScoreIndex].TextFrame.TextRange.Text = ""
+               $newDetailSlide.Shapes[$ContentIndex].TextFrame.TextRange.Text = ""
+               $newDetailSlide.Shapes[$DescriptionIndex].TextFrame.TextRange.Text = "Uncategorized items are typically technical - for instance, from Azure Advisor - or aren't sourced from the Well-Architected Review survey directly.`r`n`r`nPlease refer to your Work Items list for the complete set."
+           }
+           else{
+               $newDetailSlide.Shapes[$ScoreIndex].TextFrame.TextRange.Text = $categoryScore.ToString("#")
+               $newDetailSlide.Shapes[$DescriptionIndex].TextFrame.TextRange.Text = $categoryDescription
+           }
+           $newDetailSlide.Shapes[$InnerTitleIndex].TextFrame.TextRange.Text = "Top $x of $y recommendations:"
+           
+           $newDetailSlide.Shapes[$ContentIndex].TextFrame.TextRange.Text = ($categoryData | Sort-Object -Property "Link-Text" -Unique | Sort-Object -Property Weight -Descending | Select-Object -First $x).'Link-Text' -join "`r`n`r`n"
+           $sentenceCount = $newDetailSlide.Shapes[$ContentIndex].TextFrame.TextRange.Sentences().count
+           
+           for($k=1; $k -le $sentenceCount; $k++)
+            {
+                if($newDetailSlide.Shapes[$ContentIndex].TextFrame.TextRange.Sentences($k).Text)
+                {
+                   try
+                   {
+                       $recommendationObject = $categoryData | Where-Object{$newDetailSlide.Shapes[$ContentIndex].TextFrame.TextRange.Sentences($k).Text.Contains($_.'Link-Text')}
+                       $newDetailSlide.Shapes[$ContentIndex].TextFrame.TextRange.Sentences($k).ActionSettings(1).HyperLink.Address = $recommendationObject.Link
+                   }
+                   catch{}
+                }
+            }    
+       
+        }
+       
+        }
+       
+        $titleSlide.Delete()
+        $summarySlide.Delete()
+        $detailSlide.Delete()
+       
+        $presentation.SavecopyAs("$workingDirectory\WAF-Review-$($reportDate).pptx")
+        $presentation.Close()
 
 
 $application.quit()
