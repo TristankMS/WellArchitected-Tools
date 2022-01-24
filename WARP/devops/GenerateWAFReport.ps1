@@ -188,21 +188,25 @@ foreach($pillar in $pillars)
     $newTitleSlide.Shapes[3].TextFrame.TextRange.Text = $slideTitle
     $newTitleSlide.Shapes[4].TextFrame.TextRange.Text = $newTitleSlide.Shapes[4].TextFrame.TextRange.Text.Replace("[Report_Date]",$localReportDate)
 
+
+
     # Edit Executive Summary Slide
 
     #Add logic to get overall score
     $newSummarySlide = $summarySlide.Duplicate()
     $newSummarySlide.MoveTo($presentation.Slides.Count)
-   
-if(![string]::IsNullOrEmpty($pillarInfo.Score)){
-    $ScoreText = "$($pillarInfo.Score) - $($pillarInfo.ScoreDescription)"
-}
-else{
-   $ScoreText = "$($pillarInfo.ScoreDescription)"
-}
+    
+    if(![string]::IsNullOrEmpty($pillarInfo.Score)){
+        $ScoreText = "$($pillarInfo.Score) - $($pillarInfo.ScoreDescription)"
+    }
+    else{
+    $ScoreText = "$($pillarInfo.ScoreDescription)"
+    }
  
-$newSummarySlide.Shapes["tbScore"].TextFrame.TextRange.Text = $ScoreText
-$newSummarySlide.Shapes["tbPillarDescription"].TextFrame.TextRange.Text = $pillarInfo.Description
+    $newSummarySlide.Shapes["tbScore"].TextFrame.TextRange.Text = $ScoreText
+    $newSummarySlide.Shapes["tbPillarDescription"].TextFrame.TextRange.Text = $pillarInfo.Description
+    [Single]$summBarScore = [int]$pillarInfo.Score*2.47+56
+    $newSummarySlide.Shapes["SummaryScoreBar"].Left = $summBarScore
 
     $CategoriesList = New-Object System.Collections.ArrayList
     $categories = ($pillarData | Sort-Object -Property "Weight" -Descending).ReportingCategory | Select-Object -Unique
