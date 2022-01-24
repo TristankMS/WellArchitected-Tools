@@ -80,7 +80,7 @@ function Get-PillarInfo($pillar)
 {
     if($pillar.Contains("Cost Optimization"))
     {
-        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $costScore; "Description" = $costDescription; "ScoreDescription" = $CostScoreDescription}
+        return [pscustomobject]@{"Pillar" = $pillar; "Score" = $costScore; "Description" = $costDescription; "ScoreDescription" = $OverallScoreDescription}
     }
     if($pillar.Contains("Reliability"))
     {
@@ -107,12 +107,11 @@ $performanceScore = ""
 $reliabilityScore = ""
 $securityScore = ""
 $overallScoreDescription = ""
-$CostScoreDescription = ""
+$costScoreDescription = ""
 $operationsScoreDescription = ""
 $performanceScoreDescription = ""
 $reliabilityScoreDescription = ""
 $securityScoreDescription = ""
-
 for($i=3; $i -le 8; $i++)
 {
     if($Content[$i].Contains("overall"))
@@ -146,15 +145,21 @@ for($i=3; $i -le 8; $i++)
         $securityScoreDescription = $Content[$i].Split(',')[1]
     }
 }
+
 #endregion
 
 
+
 #region Instantiate PowerPoint variables
+#Add-type -AssemblyName office
 $application = New-Object -ComObject powerpoint.application
+#$application.visible = [Microsoft.Office.Core.MsoTriState]::msoTrue
+#$slideType = “microsoft.office.interop.powerpoint.ppSlideLayout” -as [type]
 $presentation = $application.Presentations.open($templatePresentation)
 $titleSlide = $presentation.Slides[8]
 $summarySlide = $presentation.Slides[9]
 $detailSlide = $presentation.Slides[10]
+
 #endregion
 
 #region Clean the uncategorized data
@@ -182,8 +187,10 @@ foreach($pillar in $pillars)
     $newTitleSlide.MoveTo($presentation.Slides.Count)
     $newTitleSlide.Shapes[3].TextFrame.TextRange.Text = $slideTitle
     $newTitleSlide.Shapes[4].TextFrame.TextRange.Text = $newTitleSlide.Shapes[4].TextFrame.TextRange.Text.Replace("[Report_Date]",$localReportDate)
+
     # Edit Executive Summary Slide
-    # Add logic to get overall score
+
+    #Add logic to get overall score
     $newSummarySlide = $summarySlide.Duplicate()
     $newSummarySlide.MoveTo($presentation.Slides.Count)
    
@@ -194,8 +201,8 @@ else{
    $ScoreText = "$($pillarInfo.ScoreDescription)"
 }
  
-$newSummarySlide.Shapes[4].TextFrame.TextRange.Text = $ScoreText
-$newSummarySlide.Shapes[5].TextFrame.TextRange.Text = $pillarInfo.Description
+$newSummarySlide.Shapes["tbScore"].TextFrame.TextRange.Text = $ScoreText
+$newSummarySlide.Shapes["tbPillarDescription"].TextFrame.TextRange.Text = $pillarInfo.Description
 
     $CategoriesList = New-Object System.Collections.ArrayList
     $categories = ($pillarData | Sort-Object -Property "Weight" -Descending).ReportingCategory | Select-Object -Unique
@@ -209,18 +216,17 @@ $newSummarySlide.Shapes[5].TextFrame.TextRange.Text = $pillarInfo.Description
 
         $CategoriesList = $CategoriesList | Sort-Object -Property CategoryScore -Descending
 
-        $counter = 9 #Shape count for the slide to start adding scores
+        $counter = 1 #Shape count for the slide to start adding scores
+        $ScoreGroup = $newSummarySlide.Shapes["grpDomains"].GroupItems
         foreach($category in $CategoriesList)
         {
            if($category.Category -ne "Uncategorized")
            {
                try
                {
-                   #$newSummarySlide.Shapes[8] #Domain 1 Icon
-                   #$newSummarySlide.Shapes[$counter].TextFrame.TextRange.Text = $category.CategoryScore.ToString("#")
-                   $newSummarySlide.Shapes[$counter].TextFrame.TextRange.Text = $category.CategoryWeightiestCount.ToString("#")
-                   $newSummarySlide.Shapes[$counter+1].TextFrame.TextRange.Text = $category.Category
-                   $counter = $counter + 2 # no graphic anymore
+                   $ScoreGroup[$counter].TextFrame.TextRange.Text = $category.CategoryWeightiestCount.ToString("#")
+                   $ScoreGroup[$counter+1].TextFrame.TextRange.Text = $category.Category
+                   $counter = $counter + 2 # next line, 2 items per line with no graphic
                }
                catch{}
            }
@@ -234,10 +240,8 @@ $newSummarySlide.Shapes[5].TextFrame.TextRange.Text = $pillarInfo.Description
                try
                {
                 $newSummarySlide.Shapes[$k].Delete()
-                <#$newSummarySlide.Shapes[$k].Delete()
-                $newSummarySlide.Shapes[$k+1].Delete()#>
-                }
-                catch{}
+               }
+               catch{}
             }
         }
        
